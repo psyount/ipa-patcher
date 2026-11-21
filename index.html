@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IPA Patcher</title>
+<style>
+  :root {
+    --bg: #f4f5f7; --card: #ffffff; --text: #1c1d21; --muted: #6b6f78; --line: #e3e5ea;
+    --accent: #2f6bff; --accent-ink: #ffffff; --warn: #b26a00; --warn-bg: #fff4e0;
+    --err: #c62828; --ok: #1f8a4c; --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141518; --card: #1d1f23; --text: #eceef2; --muted: #9399a4; --line: #2c2f35;
+      --accent: #5b8cff; --warn: #ffb74d; --warn-bg: #3a2c12; --err: #ff6b6b; --ok: #5fd08e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
+  }
+  main { max-width: 720px; margin: 0 auto; padding: 40px 20px 80px; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); margin: 0 0 28px; font-size: 14px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px 20px; margin-bottom: 14px; transition: opacity .2s;
+  }
+  .card.disabled { opacity: .45; pointer-events: none; }
+  .card h2 { font-size: 15px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  .num {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--accent); color: var(--accent-ink);
+    font-size: 12px; display: inline-grid; place-items: center; flex: none;
+  }
+  .drop {
+    border: 2px dashed var(--line); border-radius: 12px; padding: 26px; text-align: center;
+    color: var(--muted); cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+  .drop b { color: var(--text); }
+  .info { display: none; margin-top: 14px; }
+  .info.show { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; font-size: 14px; }
+  .info dt { color: var(--muted); }
+  .info dd { margin: 0; font-family: var(--mono); font-size: 13px; word-break: break-all; }
+  input[type=text] {
+    width: 100%; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--line);
+    background: transparent; color: var(--text); font: inherit;
+  }
+  input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  .row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  button, .btn {
+    font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--text);
+    padding: 8px 14px; border-radius: 9px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  .primary {
+    background: var(--accent); color: var(--accent-ink); border: none; width: 100%;
+    padding: 13px; font-size: 16px; font-weight: 600; border-radius: 12px;
+  }
+  .primary:disabled { opacity: .45; cursor: default; }
+  .icon-preview {
+    width: 76px; height: 76px; border-radius: 17px; background: var(--line);
+    background-size: cover; background-position: center; flex: none;
+    box-shadow: 0 1px 4px rgba(0,0,0,.15);
+  }
+  .muted { color: var(--muted); font-size: 13px; }
+  ul.dylibs { list-style: none; padding: 0; margin: 0 0 12px; }
+  ul.dylibs li {
+    display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line);
+    border-radius: 9px; margin-bottom: 6px; font-family: var(--mono); font-size: 13px;
+  }
+  ul.dylibs li span { flex: 1; word-break: break-all; }
+  ul.dylibs li button { padding: 2px 9px; font-size: 13px; }
+  .warn { color: var(--warn); background: var(--warn-bg); border-radius: 8px; padding: 8px 10px; font-size: 13px; margin-top: 8px; }
+  .tag { font-family: inherit; font-size: 11px; padding: 1px 6px; border-radius: 5px; background: var(--warn-bg); color: var(--warn); }
+  label.check { display: flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+  pre.log {
+    font-family: var(--mono); font-size: 12.5px; background: var(--bg); border-radius: 10px;
+    padding: 12px; margin: 14px 0 0; white-space: pre-wrap; max-height: 260px; overflow: auto; display: none;
+  }
+  pre.log.show { display: block; }
+  .log .e { color: var(--err); } .log .w { color: var(--warn); } .log .o { color: var(--ok); }
+  a.download {
+    display: none; margin-top: 12px; text-align: center; text-decoration: none;
+    background: var(--ok); color: #fff; padding: 12px; border-radius: 12px; font-weight: 600;
+  }
+  a.download.show { display: block; }
+  footer { color: var(--muted); font-size: 12.5px; margin-top: 22px; line-height: 1.7; }
+</style>
+</head>
+<body>
+<main>
+  <h1>IPA Patcher</h1>
+  <p class="sub">dylib 삽입 · 이름 변경 · 아이콘 변경. 모든 처리는 이 브라우저 안에서만 이뤄지고, 파일은 어디로도 업로드되지 않아요.</p>
+
+  <section class="card" id="step-ipa">
+    <h2><span class="num">1</span>IPA 불러오기</h2>
+    <div class="drop" id="drop"><b>IPA 파일을 끌어다 놓거나 클릭</b><br><span class="muted">.ipa</span></div>
+    <input type="file" id="ipa-input" accept=".ipa" hidden>
+    <dl class="info" id="app-info"></dl>
+  </section>
+
+  <section class="card disabled" id="step-name">
+    <h2><span class="num">2</span>앱 이름</h2>
+    <input type="text" id="name-input" placeholder="비워 두면 그대로">
+  </section>
+
+  <section class="card disabled" id="step-icon">
+    <h2><span class="num">3</span>앱 아이콘</h2>
+    <div class="row">
+      <div class="icon-preview" id="icon-preview"></div>
+      <div>
+        <button id="icon-btn">이미지 선택</button>
+        <button id="icon-clear" hidden>지우기</button>
+        <div class="muted" style="margin-top:6px">정사각형 1024×1024 권장 · 투명한 부분은 홈 화면에서 검게 보여요</div>
+      </div>
+    </div>
+    <input type="file" id="icon-input" accept="image/*" hidden>
+  </section>
+
+  <section class="card disabled" id="step-dylib">
+    <h2><span class="num">4</span>dylib 삽입</h2>
+    <ul class="dylibs" id="dylib-list"></ul>
+    <div class="row">
+      <button id="dylib-btn">dylib 추가</button>
+      <label class="check"><input type="checkbox" id="weak-input"> weak 링크 (dylib를 못 불러와도 앱이 꺼지지 않게)</label>
+    </div>
+    <input type="file" id="dylib-input" accept=".dylib" multiple hidden>
+    <div class="warn" id="substrate-warn" hidden>
+      <span class="tag">CydiaSubstrate</span> 표시된 dylib는 탈옥용 후킹 프레임워크를 찾아요.
+      탈옥 안 된 기기에서는 CydiaSubstrate 대체 프레임워크(ElleKit 등)도 같이 넣어야 실행돼요.
+    </div>
+  </section>
+
+  <button class="primary" id="build" disabled>새 IPA 만들기</button>
+  <pre class="log" id="log"></pre>
+  <a class="download" id="download">⬇︎ 다운로드</a>
+
+  <footer>
+    서명은 하지 않아요. 만든 IPA는 SideStore · AltStore · Sideloadly 로 설치할 때 서명돼요.<br>
+    App Store에서 받은 그대로의(암호화된) IPA에는 dylib를 넣어도 실행되지 않아요. 복호화된 IPA를 쓰세요.<br>
+    필요 환경: Safari 16.4+ / Chrome 103+ / Firefox 113+ · 4GB 넘는 IPA는 지원하지 않아요.
+  </footer>
+</main>
+
+<script>
+"use strict";
+
+/* ════════════════════════════════════════════════════════════
+   공통 도구
+   ════════════════════════════════════════════════════════════ */
+class PatchError extends Error {}
+const te = new TextEncoder();
+const td = new TextDecoder();
+
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function crc32(u8) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+// 브라우저 내장 압축 기능 사용 (외부 라이브러리 없음)
+async function pipe(u8, stream) {
+  return new Uint8Array(await new Response(new Blob([u8]).stream().pipeThrough(stream)).arrayBuffer());
+}
+const inflate = (u8) => pipe(u8, new DecompressionStream("deflate-raw"));
+const deflate = (u8) => pipe(u8, new CompressionStream("deflate-raw"));
+
+function toBase64(u8) {
+  let s = "";
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+function fromBase64(str) {
+  const s = atob(str.replace(/\s+/g, ""));
+  const u8 = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u8[i] = s.charCodeAt(i);
+  return u8;
+}
+function bytesInclude(hay, needle) {
+  const n = te.encode(needle), first = n[0];
+  outer: for (let i = hay.indexOf(first); i !== -1 && i <= hay.length - n.length; i = hay.indexOf(first, i + 1)) {
+    for (let j = 1; j < n.length; j++) if (hay[i + j] !== n[j]) continue outer;
+    return true;
+  }
+  return false;
+}
+const fmtSize = (b) => b > 1 << 20 ? (b / (1 << 20)).toFixed(1) + " MB" : (b / 1024).toFixed(0) + " KB";
+
+/* ════════════════════════════════════════════════════════════
+   1. ZIP (IPA = Payload 폴더를 묶은 ZIP 파일)
+   ════════════════════════════════════════════════════════════ */
+function readZip(buf) {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 65535); i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new PatchError("ZIP(IPA) 파일이 아니에요.");
+
+  let count = dv.getUint16(eocd + 10, true), cdOff = dv.getUint32(eocd + 16, true);
+  if (count === 0xFFFF || cdOff === 0xFFFFFFFF) {           // ZIP64
+    const loc = eocd - 20;
+    if (loc >= 0 && dv.getUint32(loc, true) === 0x07064b50) {
+      const z = Number(dv.getBigUint64(loc + 8, true));
+      count = Number(dv.getBigUint64(z + 32, true));
+      cdOff = Number(dv.getBigUint64(z + 48, true));
+    }
+  }
+
+  const entries = [];
+  let p = cdOff;
+  for (let i = 0; i < count; i++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) throw new PatchError("ZIP 목록이 손상됐어요.");
+    const e = {
+      madeBy: dv.getUint16(p + 4, true), method: dv.getUint16(p + 10, true),
+      time: dv.getUint16(p + 12, true), date: dv.getUint16(p + 14, true),
+      crc: dv.getUint32(p + 16, true), csize: dv.getUint32(p + 20, true),
+      usize: dv.getUint32(p + 24, true), ext: dv.getUint32(p + 38, true),
+    };
+    const nl = dv.getUint16(p + 28, true), el = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true);
+    let lo = dv.getUint32(p + 42, true);
+    e.name = td.decode(buf.subarray(p + 46, p + 46 + nl));
+    for (let q = p + 46 + nl, end = q + el; q + 4 <= end; ) {   // ZIP64 추가 정보
+      const id = dv.getUint16(q, true), sz = dv.getUint16(q + 2, true);
+      if (id === 1) {
+        let r = q + 4;
+        if (e.usize === 0xFFFFFFFF) { e.usize = Number(dv.getBigUint64(r, true)); r += 8; }
+        if (e.csize === 0xFFFFFFFF) { e.csize = Number(dv.getBigUint64(r, true)); r += 8; }
+        if (lo === 0xFFFFFFFF) { lo = Number(dv.getBigUint64(r, true)); }
+      }
+      q += 4 + sz;
+    }
+    const start = lo + 30 + dv.getUint16(lo + 26, true) + dv.getUint16(lo + 28, true);
+    e.raw = buf.subarray(start, start + e.csize);   // 압축된 상태 그대로 (안 바꾸는 파일은 그대로 복사)
+    entries.push(e);
+    p += 46 + nl + el + cl;
+  }
+  return entries;
+}
+
+async function entryData(e) {
+  if (e.data) return e.data;
+  if (e.method === 0) return e.raw;
+  if (e.method === 8) return inflate(e.raw);
+  throw new PatchError(`지원하지 않는 압축 방식이에요: ${e.name}`);
+}
+
+function dosTime(d) {
+  return {
+    time: (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1),
+    date: ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate(),
+  };
+}
+
+async function writeZip(entries) {
+  if (entries.length > 0xFFFF) throw new PatchError("파일 개수가 너무 많아요 (65535개 초과).");
+  const parts = [], central = [], now = dosTime(new Date());
+  let off = 0;
+  for (const e of entries) {
+    let method = e.method, crc = e.crc, csize = e.csize, usize = e.usize, raw = e.raw;
+    let { time, date } = e;
+    if (e.data) {                                     // 새로 만들었거나 고친 파일
+      usize = e.data.length; crc = crc32(e.data); ({ time, date } = now);
+      const d = usize ? await deflate(e.data) : e.data;
+      if (usize && d.length < usize) { method = 8; raw = d; } else { method = 0; raw = e.data; }
+      csize = raw.length;
+    }
+    if (off + csize > 0xFFFFFFF0 || usize >= 0xFFFFFFFF) throw new PatchError("4GB 넘는 IPA는 지원하지 않아요.");
+    const name = te.encode(e.name);
+
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x800, true);
+    lh.setUint16(8, method, true); lh.setUint16(10, time, true); lh.setUint16(12, date, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, csize, true); lh.setUint32(22, usize, true);
+    lh.setUint16(26, name.length, true);
+    parts.push(lh.buffer, name, raw);
+
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, e.madeBy ?? 0x031E, true); ch.setUint16(6, 20, true);
+    ch.setUint16(8, 0x800, true); ch.setUint16(10, method, true); ch.setUint16(12, time, true);
+    ch.setUint16(14, date, true); ch.setUint32(16, crc, true); ch.setUint32(20, csize, true);
+    ch.setUint32(24, usize, true); ch.setUint16(28, name.length, true);
+    ch.setUint32(38, e.ext >>> 0, true);             // 유닉스 권한(실행 권한 등) 보존
+    ch.setUint32(42, off, true);
+    central.push(ch.buffer, name);
+
+    off += 30 + name.length + csize;
+  }
+  const cdSize = central.reduce((s, b) => s + b.byteLength, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, entries.length, true); end.setUint16(10, entries.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, off, true);
+  return new Blob([...parts, ...central, end.buffer], { type: "application/octet-stream" });
+}
+
+/* ════════════════════════════════════════════════════════════
+   2. Mach-O (iOS 실행 파일) — dylib 삽입
+   ════════════════════════════════════════════════════════════ */
+const LC_SEGMENT = 0x1, LC_SEGMENT_64 = 0x19;
+const LC_LOAD_DYLIB = 0xC, LC_LOAD_WEAK_DYLIB = 0x80000018;
+const LC_ENCRYPTION_INFO = 0x21, LC_ENCRYPTION_INFO_64 = 0x2C;
+const DYLIB_CMDS = new Set([0xC, 0xD, 0x80000018, 0x8000001F, 0x80000023]);
+const ZEROFILL = new Set([0x1, 0xC, 0x12]);
+
+function machoSlices(dv) {
+  const magic = dv.getUint32(0, false);
+  if (magic !== 0xCAFEBABE && magic !== 0xCAFEBABF) return [0];
+  const n = dv.getUint32(4, false), out = [];
+  for (let i = 0, p = 8; i < n; i++) {
+    out.push(magic === 0xCAFEBABE ? dv.getUint32(p + 8, false) : Number(dv.getBigUint64(p + 8, false)));
+    p += magic === 0xCAFEBABE ? 20 : 32;
+  }
+  return out;
+}
+
+// load command 목록을 훑어서 필요한 정보를 모은다
+function scanSlice(u8, dv, base) {
+  const magic = dv.getUint32(base, true);
+  let is64, headerSize;
+  if (magic === 0xFEEDFACF) { is64 = true; headerSize = 32; }
+  else if (magic === 0xFEEDFACE) { is64 = false; headerSize = 28; }
+  else throw new PatchError(`Mach-O 실행 파일이 아니에요 (magic=0x${magic.toString(16)})`);
+
+  const ncmds = dv.getUint32(base + 16, true), sizeofcmds = dv.getUint32(base + 20, true);
+  let firstData = null, encrypted = false;
+  const dylibs = [];
+  for (let i = 0, p = base + headerSize; i < ncmds; i++) {
+    const cmd = dv.getUint32(p, true), cmdsize = dv.getUint32(p + 4, true);
+    if (cmd === LC_SEGMENT_64 || cmd === LC_SEGMENT) {
+      const [nsects, sect, ssize, offAt] = cmd === LC_SEGMENT_64
+        ? [dv.getUint32(p + 64, true), p + 72, 80, 48]
+        : [dv.getUint32(p + 48, true), p + 56, 68, 40];
+      for (let s = 0; s < nsects; s++) {
+        const q = sect + s * ssize;
+        const off = dv.getUint32(q + offAt, true), flags = dv.getUint32(q + offAt + 16, true);
+        if (off && !ZEROFILL.has(flags & 0xFF)) firstData = firstData === null ? off : Math.min(firstData, off);
+      }
+    } else if (DYLIB_CMDS.has(cmd)) {
+      const raw = u8.subarray(p + dv.getUint32(p + 8, true), p + cmdsize);
+      const z = raw.indexOf(0);
+      dylibs.push(td.decode(z < 0 ? raw : raw.subarray(0, z)));
+    } else if (cmd === LC_ENCRYPTION_INFO || cmd === LC_ENCRYPTION_INFO_64) {
+      if (dv.getUint32(p + 16, true) !== 0) encrypted = true;
+    }
+    p += cmdsize;
+  }
+  return { is64, headerSize, ncmds, sizeofcmds, firstData, encrypted, dylibs };
+}
+
+function isEncrypted(u8) {
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  return machoSlices(dv).some((b) => scanSlice(u8, dv, b).encrypted);
+}
+
+function injectDylib(u8, installPath, weak) {
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  return machoSlices(dv).map((base) => {
+    const s = scanSlice(u8, dv, base);
+    if (s.encrypted) throw new PatchError("암호화된(App Store 원본) 실행 파일이에요. 복호화된 IPA가 필요해요.");
+    if (s.dylibs.includes(installPath)) return "이미 있음";
+    if (s.firstData === null) throw new PatchError("섹션 정보를 찾지 못했어요.");
+
+    const name = te.encode(installPath + "\0");
+    const align = s.is64 ? 8 : 4;
+    const cmdsize = Math.ceil((24 + name.length) / align) * align;
+    const at = base + s.headerSize + s.sizeofcmds;
+
+    // load command 목록 끝 ~ 실제 코드 시작 사이의 빈 공간에 써 넣는다
+    if (s.headerSize + s.sizeofcmds + cmdsize > s.firstData) throw new PatchError("실행 파일 헤더에 빈 공간이 부족해요.");
+    if (u8.subarray(at, at + cmdsize).some((b) => b)) throw new PatchError("넣으려는 자리가 비어 있지 않아요.");
+
+    dv.setUint32(at, weak ? LC_LOAD_WEAK_DYLIB : LC_LOAD_DYLIB, true);
+    dv.setUint32(at + 4, cmdsize, true);
+    dv.setUint32(at + 8, 24, true);        // 경로 문자열 위치
+    dv.setUint32(at + 12, 2, true);        // timestamp
+    dv.setUint32(at + 16, 0x10000, true);  // current_version 1.0.0
+    dv.setUint32(at + 20, 0x10000, true);  // compatibility_version 1.0.0
+    u8.set(name, at + 24);
+    dv.setUint32(base + 16, s.ncmds + 1, true);
+    dv.setUint32(base + 20, s.sizeofcmds + cmdsize, true);
+    return "추가됨";
+  });
+}
+
+/* ════════════════════════════════════════════════════════════
+   3. plist (Info.plist 등) 읽기·쓰기
+   읽기: 바이너리 / XML 둘 다,  쓰기: XML (iOS가 그대로 읽어요)
+   ════════════════════════════════════════════════════════════ */
+class PReal { constructor(v) { this.v = v; } }
+
+function parseBplist(u8) {
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  const t = u8.length - 32;
+  const offSize = u8[t + 6], refSize = u8[t + 7];
+  const top = Number(dv.getBigUint64(t + 16, false)), table = Number(dv.getBigUint64(t + 24, false));
+  const uint = (p, n) => { let v = 0; for (let i = 0; i < n; i++) v = v * 256 + u8[p + i]; return v; };
+
+  const parse = (idx) => {
+    let p = uint(table + idx * offSize, offSize);
+    const m = u8[p], hi = m >> 4, lo = m & 15;
+    const len = () => {
+      if (lo !== 15) { p += 1; return lo; }
+      const n = 1 << (u8[p + 1] & 15), v = uint(p + 2, n);
+      p += 2 + n; return v;
+    };
+    switch (hi) {
+      case 0x0: return lo === 9 ? true : lo === 8 ? false : null;
+      case 0x1: {
+        const n = 1 << lo;
+        if (n >= 8) { const b = dv.getBigInt64(p + 1 + n - 8, false); return Number.isSafeInteger(Number(b)) ? Number(b) : b; }
+        return uint(p + 1, n);
+      }
+      case 0x2: return new PReal(lo === 2 ? dv.getFloat32(p + 1, false) : dv.getFloat64(p + 1, false));
+      case 0x3: return new Date((dv.getFloat64(p + 1, false) + 978307200) * 1000);
+      case 0x4: { const n = len(); return u8.slice(p, p + n); }
+      case 0x5: { const n = len(); let s = ""; for (let i = 0; i < n; i++) s += String.fromCharCode(u8[p + i]); return s; }
+      case 0x6: { const n = len(); let s = ""; for (let i = 0; i < n; i++) s += String.fromCharCode(dv.getUint16(p + 2 * i, false)); return s; }
+      case 0x8: return { "CF$UID": uint(p + 1, lo + 1) };
+      case 0xA: { const n = len(), a = []; for (let i = 0; i < n; i++) a.push(parse(uint(p + i * refSize, refSize))); return a; }
+      case 0xD: {
+        const n = len(), o = {};
+        for (let i = 0; i < n; i++) o[parse(uint(p + i * refSize, refSize))] = parse(uint(p + (n + i) * refSize, refSize));
+        return o;
+      }
+    }
+    throw new PatchError(`알 수 없는 plist 형식 (0x${m.toString(16)})`);
+  };
+  return parse(top);
+}
+
+function parseXmlPlist(text) {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.getElementsByTagName("parsererror").length) throw new PatchError("plist(XML)를 읽지 못했어요.");
+  const conv = (el) => {
+    switch (el.tagName) {
+      case "dict": { const o = {}, c = [...el.children]; for (let i = 0; i < c.length; i += 2) o[c[i].textContent] = conv(c[i + 1]); return o; }
+      case "array": return [...el.children].map(conv);
+      case "string": return el.textContent;
+      case "integer": { const s = el.textContent.trim(), n = Number(s); return Number.isSafeInteger(n) ? n : BigInt(s); }
+      case "real": return new PReal(parseFloat(el.textContent));
+      case "true": return true;
+      case "false": return false;
+      case "date": return new Date(el.textContent.trim());
+      case "data": return fromBase64(el.textContent);
+    }
+    throw new PatchError(`알 수 없는 plist 태그 <${el.tagName}>`);
+  };
+  return conv(doc.documentElement.firstElementChild);
+}
+
+function decodeText(u8) {
+  if (u8[0] === 0xFF && u8[1] === 0xFE) return { text: new TextDecoder("utf-16le").decode(u8), enc: "utf-16le" };
+  if (u8[0] === 0xFE && u8[1] === 0xFF) return { text: new TextDecoder("utf-16be").decode(u8), enc: "utf-16be" };
+  return { text: td.decode(u8), enc: "utf-8" };
+}
+function encodeText(text, enc) {
+  if (enc === "utf-8") return te.encode(text);
+  const body = text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;   // 디코딩 때 BOM이 빠졌을 수도
+  const out = new Uint8Array(2 + body.length * 2), dv = new DataView(out.buffer);
+  const le = enc === "utf-16le";
+  dv.setUint16(0, 0xFEFF, le);
+  for (let i = 0; i < body.length; i++) dv.setUint16(2 + i * 2, body.charCodeAt(i), le);
+  return out;
+}
+
+const isBplist = (u8) => td.decode(u8.subarray(0, 6)) === "bplist";
+function parsePlist(u8) {
+  return isBplist(u8) ? parseBplist(u8) : parseXmlPlist(decodeText(u8).text);
+}
+
+function plistToXml(obj) {
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const w = (v, d) => {
+    const pad = "\t".repeat(d);
+    if (typeof v === "string") return `${pad}<string>${esc(v)}</string>\n`;
+    if (typeof v === "boolean") return `${pad}<${v}/>\n`;
+    if (typeof v === "bigint") return `${pad}<integer>${v}</integer>\n`;
+    if (typeof v === "number") return Number.isInteger(v) ? `${pad}<integer>${v}</integer>\n` : `${pad}<real>${v}</real>\n`;
+    if (v instanceof PReal) return `${pad}<real>${v.v}</real>\n`;
+    if (v instanceof Date) return `${pad}<date>${v.toISOString().replace(/\.\d{3}Z$/, "Z")}</date>\n`;
+    if (v instanceof Uint8Array) return `${pad}<data>${toBase64(v)}</data>\n`;
+    if (v === null || v === undefined) return `${pad}<string></string>\n`;
+    if (Array.isArray(v)) return v.length ? `${pad}<array>\n${v.map((x) => w(x, d + 1)).join("")}${pad}</array>\n` : `${pad}<array/>\n`;
+    const keys = Object.keys(v);
+    if (!keys.length) return `${pad}<dict/>\n`;
+    return `${pad}<dict>\n${keys.map((k) => `${pad}\t<key>${esc(k)}</key>\n${w(v[k], d + 1)}`).join("")}${pad}</dict>\n`;
+  };
+  return te.encode('<?xml version="1.0" encoding="UTF-8"?>\n'
+    + '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n'
+    + `<plist version="1.0">\n${w(obj, 0)}</plist>\n`);
+}
+
+// 언어별 InfoPlist.strings 안의 이름 바꾸기 (안 바꾸면 홈 화면에 옛 이름이 보일 수 있음)
+function patchStringsName(u8, newName) {
+  if (isBplist(u8) || decodeText(u8).text.trimStart().startsWith("<?xml")) {
+    const obj = parsePlist(u8);
+    let hit = false;
+    for (const k of ["CFBundleDisplayName", "CFBundleName"]) if (k in obj) { obj[k] = newName; hit = true; }
+    return hit ? plistToXml(obj) : null;
+  }
+  const { text, enc } = decodeText(u8);
+  const escaped = newName.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  let n = 0;
+  const out = text.replace(/("?(?:CFBundleDisplayName|CFBundleName)"?\s*=\s*)"(?:[^"\\]|\\.)*"/g,
+    (_, head) => { n++; return `${head}"${escaped}"`; });
+  return n ? encodeText(out, enc) : null;
+}
+
+/* ════════════════════════════════════════════════════════════
+   4. 아이콘 만들기 (캔버스로 크기 변환)
+   ════════════════════════════════════════════════════════════ */
+const ICON_PREFIX = "CustomIcon";
+const ICON_SIZES = [
+  ["60x60@2x.png", 120],            // 아이폰
+  ["60x60@3x.png", 180],            // 아이폰 (큰 화면)
+  ["76x76@2x~ipad.png", 152],       // 아이패드
+  ["83.5x83.5@2x~ipad.png", 167],   // 아이패드 Pro/Air
+];
+async function makeIconPng(bitmap, px) {
+  const c = document.createElement("canvas");
+  c.width = c.height = px;
+  const ctx = c.getContext("2d");
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(bitmap, 0, 0, px, px);
+  const blob = await new Promise((r) => c.toBlob(r, "image/png"));
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+/* ════════════════════════════════════════════════════════════
+   5. 전체 흐름
+   ════════════════════════════════════════════════════════════ */
+function findApp(entries) {
+  const e = entries.find((x) => /^Payload\/[^/]+\.app\/Info\.plist$/.test(x.name));
+  if (!e) throw new PatchError("Payload 폴더 안에서 .app 을 찾지 못했어요. 올바른 IPA인가요?");
+  return { appDir: e.name.slice(0, -"Info.plist".length), infoEntry: e };
+}
+
+async function patchIpa({ entries, dylibs, weak, newName, iconBitmap, log }) {
+  entries = entries.map((e) => ({ ...e }));              // 원본은 그대로 두고 복사본을 고친다
+  const byName = new Map(entries.map((e) => [e.name, e]));
+  const put = (name, data, mode) => {
+    const e = byName.get(name);
+    if (e) { e.data = data; return; }
+    const n = { name, data, madeBy: 0x031E, ext: ((0o100000 | mode) << 16) >>> 0 };
+    entries.push(n); byName.set(name, n);
+  };
+
+  const { appDir, infoEntry } = findApp(entries);
+  const info = parsePlist(await entryData(infoEntry));
+  const exeName = appDir + info.CFBundleExecutable;
+
+  log("[1/4] dylib 삽입");
+  if (!dylibs.length) log("      (건너뜀)");
+  else {
+    const exeEntry = byName.get(exeName);
+    if (!exeEntry) throw new PatchError(`실행 파일을 찾지 못했어요: ${exeName}`);
+    const exe = (await entryData(exeEntry)).slice();      // 복사본에서 작업
+    for (const d of dylibs) {
+      const installPath = `@executable_path/Frameworks/${d.name}`;
+      const res = injectDylib(exe, installPath, weak);
+      put(`${appDir}Frameworks/${d.name}`, d.data, 0o755);
+      log(`      ${d.name} → ${installPath}  (${[...new Set(res)].join(", ")}${weak ? ", weak" : ""})`, "o");
+    }
+    put(exeName, exe, 0o755);
+  }
+
+  log("[2/4] 이름 변경");
+  if (newName) {
+    const old = info.CFBundleDisplayName || info.CFBundleName;
+    info.CFBundleDisplayName = newName;
+    info.CFBundleName = newName;
+    const langs = [];
+    for (const e of entries) {
+      if (e.name.startsWith(appDir) && /\.lproj\/InfoPlist\.strings$/.test(e.name)) {
+        const patched = patchStringsName(await entryData(e), newName);
+        if (patched) { e.data = patched; langs.push(e.name.split("/").at(-2)); }
+      }
+    }
+    log(`      '${old}' → '${newName}'` + (langs.length ? `  (언어별 파일도 수정: ${langs.join(", ")})` : ""), "o");
+  } else log("      (건너뜀)");
+
+  log("[3/4] 아이콘 변경");
+  if (iconBitmap) {
+    for (const [tail, px] of ICON_SIZES) put(`${appDir}${ICON_PREFIX}${tail}`, await makeIconPng(iconBitmap, px), 0o644);
+    // CFBundleIconName(Assets.car 속 아이콘)을 빼면 iOS가 아래 PNG 목록을 대신 써요
+    info.CFBundleIcons = { ...(info.CFBundleIcons || {}), CFBundlePrimaryIcon: { CFBundleIconFiles: [`${ICON_PREFIX}60x60`] } };
+    info["CFBundleIcons~ipad"] = {
+      ...(info["CFBundleIcons~ipad"] || {}),
+      CFBundlePrimaryIcon: { CFBundleIconFiles: [`${ICON_PREFIX}60x60`, `${ICON_PREFIX}76x76`, `${ICON_PREFIX}83.5x83.5`] },
+    };
+    delete info.CFBundleIconFile;
+    delete info.CFBundleIconFiles;
+    log(`      ${ICON_SIZES.length}개 크기로 변환해서 넣음`, "o");
+  } else log("      (건너뜀)");
+
+  put(infoEntry.name, plistToXml(info), 0o644);
+
+  log("[4/4] 새 IPA 묶는 중…");
+  return writeZip(entries);
+}
+
+/* ════════════════════════════════════════════════════════════
+   6. 화면
+   ════════════════════════════════════════════════════════════ */
+const $ = (id) => document.getElementById(id);
+const state = { entries: null, ipaName: "", appName: "", dylibs: [], iconBitmap: null, downloadUrl: null, blob: null, fileName: "" };
+
+// Claude 아티팩트 안에서 열렸을 때는 일반 다운로드가 막혀 있어서, 아티팩트의 다운로드 기능을 쓴다.
+// (.ipa 확장자는 허용되지 않아 .ipa.zip 으로 저장 → 끝의 .zip 만 지우면 IPA)
+let downloadsApi = null;
+try {
+  if (window.claude && typeof window.claude.use === "function") {
+    window.claude.use("downloads").then((d) => { downloadsApi = d; }).catch(() => {});
+  }
+} catch { /* 일반 브라우저에서 파일로 열었을 때 */ }
+
+const logEl = $("log");
+function log(msg, cls) {
+  logEl.classList.add("show");
+  const line = document.createElement("div");
+  if (cls) line.className = cls;
+  line.textContent = msg;
+  logEl.append(line);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function clearOutput() {
+  logEl.textContent = ""; logEl.classList.remove("show");
+  $("download").classList.remove("show");
+  if (state.downloadUrl) { URL.revokeObjectURL(state.downloadUrl); state.downloadUrl = null; }
+}
+
+// ── IPA 불러오기
+const drop = $("drop");
+drop.onclick = () => $("ipa-input").click();
+drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); if (e.dataTransfer.files[0]) loadIpa(e.dataTransfer.files[0]); };
+$("ipa-input").onchange = (e) => { if (e.target.files[0]) loadIpa(e.target.files[0]); e.target.value = ""; };
+
+async function loadIpa(file) {
+  clearOutput();
+  drop.innerHTML = `<b>${file.name.replace(/</g, "&lt;")}</b><br><span class="muted">읽는 중…</span>`;
+  try {
+    const entries = readZip(new Uint8Array(await file.arrayBuffer()));
+    const { appDir, infoEntry } = findApp(entries);
+    const info = parsePlist(await entryData(infoEntry));
+    const exe = entries.find((e) => e.name === appDir + info.CFBundleExecutable);
+    const encrypted = exe ? isEncrypted(await entryData(exe)) : false;
+
+    Object.assign(state, { entries, ipaName: file.name.replace(/\.ipa$/i, ""), appName: info.CFBundleDisplayName || info.CFBundleName || "" });
+    drop.innerHTML = `<b>${file.name.replace(/</g, "&lt;")}</b><br><span class="muted">${fmtSize(file.size)} · 다른 파일로 바꾸려면 클릭</span>`;
+
+    const rows = [
+      ["이름", state.appName], ["번들 ID", info.CFBundleIdentifier], ["버전", `${info.CFBundleShortVersionString ?? "?"} (${info.CFBundleVersion ?? "?"})`],
+      ["실행 파일", info.CFBundleExecutable], ["최소 iOS", info.MinimumOSVersion ?? "?"],
+    ];
+    $("app-info").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${String(v ?? "").replace(/</g, "&lt;")}</dd>`).join("")
+      + (encrypted ? `<dt></dt><dd><span class="tag">⚠ 암호화된 실행 파일 — dylib 삽입 불가 (이름·아이콘 변경은 가능)</span></dd>` : "");
+    $("app-info").classList.add("show");
+    $("name-input").placeholder = `${state.appName} (비워 두면 그대로)`;
+    for (const id of ["step-name", "step-icon", "step-dylib"]) $(id).classList.remove("disabled");
+    $("build").disabled = false;
+  } catch (err) {
+    state.entries = null;
+    $("build").disabled = true;
+    drop.innerHTML = `<b>다시 시도해 주세요</b><br><span class="muted">${err.message}</span>`;
+    $("app-info").classList.remove("show");
+    if (!(err instanceof PatchError)) console.error(err);
+  }
+}
+
+// ── 아이콘
+$("icon-btn").onclick = () => $("icon-input").click();
+$("icon-input").onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  try {
+    state.iconBitmap = await createImageBitmap(f);
+    $("icon-preview").style.backgroundImage = `url(${URL.createObjectURL(f)})`;
+    $("icon-clear").hidden = false;
+  } catch { alert("이미지를 읽지 못했어요."); }
+};
+$("icon-clear").onclick = () => {
+  state.iconBitmap = null; $("icon-preview").style.backgroundImage = ""; $("icon-clear").hidden = true;
+};
+
+// ── dylib
+$("dylib-btn").onclick = () => $("dylib-input").click();
+$("dylib-input").onchange = async (e) => {
+  for (const f of e.target.files) {
+    const data = new Uint8Array(await f.arrayBuffer());
+    state.dylibs = state.dylibs.filter((d) => d.name !== f.name);
+    state.dylibs.push({ name: f.name, data, substrate: bytesInclude(data, "CydiaSubstrate") });
+  }
+  e.target.value = "";
+  renderDylibs();
+};
+function renderDylibs() {
+  const ul = $("dylib-list");
+  ul.innerHTML = "";
+  state.dylibs.forEach((d, i) => {
+    const li = document.createElement("li");
+    const span = document.createElement("span");
+    span.textContent = `${d.name}  ·  ${fmtSize(d.data.length)}`;
+    li.append(span);
+    if (d.substrate) li.insertAdjacentHTML("beforeend", `<span class="tag" style="flex:none">CydiaSubstrate</span>`);
+    const b = document.createElement("button");
+    b.textContent = "✕";
+    b.onclick = () => { state.dylibs.splice(i, 1); renderDylibs(); };
+    li.append(b);
+    ul.append(li);
+  });
+  $("substrate-warn").hidden = !state.dylibs.some((d) => d.substrate);
+}
+
+// ── 다운로드 (아티팩트 안이면 아티팩트 저장 기능, 아니면 일반 <a download>)
+$("download").onclick = async (ev) => {
+  if (!downloadsApi || !state.blob) return;
+  ev.preventDefault();
+  try {
+    await downloadsApi.save({ filename: `${state.fileName}.zip`, data: state.blob });
+    log("저장했어요. 파일 이름 끝의 .zip 을 지우면 IPA예요. (Safari가 자동으로 압축을 풀었다면 설정에서 '다운로드 후 안전한 파일 열기'를 꺼 주세요)", "o");
+  } catch (err) {
+    if (err && err.code === "declined") return;
+    log("저장 실패: " + ((err && err.message) || err), "e");
+  }
+};
+
+// ── 만들기
+$("build").onclick = async () => {
+  clearOutput();
+  const btn = $("build");
+  btn.disabled = true; btn.textContent = "만드는 중…";
+  try {
+    const newName = $("name-input").value.trim();
+    const blob = await patchIpa({
+      entries: state.entries, dylibs: state.dylibs, weak: $("weak-input").checked,
+      newName, iconBitmap: state.iconBitmap, log,
+    });
+    const fileName = `${(newName || state.ipaName).replace(/[\\/:*?"<>|]/g, "_")}_patched.ipa`;
+    state.blob = blob; state.fileName = fileName;
+    state.downloadUrl = URL.createObjectURL(blob);
+    const a = $("download");
+    a.href = state.downloadUrl; a.download = fileName;
+    a.textContent = downloadsApi
+      ? `⬇︎ ${fileName}.zip 저장 (${fmtSize(blob.size)}) — 받은 뒤 끝의 .zip 지우기`
+      : `⬇︎ ${fileName} 다운로드 (${fmtSize(blob.size)})`;
+    a.classList.add("show");
+    log("완료! SideStore / AltStore / Sideloadly 로 설치하면 돼요.", "o");
+  } catch (err) {
+    log("오류: " + err.message, "e");
+    if (!(err instanceof PatchError)) console.error(err);
+  } finally {
+    btn.disabled = false; btn.textContent = "새 IPA 만들기";
+  }
+};
+</script>
+</body>
+</html>
