@@ -2,8 +2,19 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>IPA Patcher</title>
+<!-- 홈 화면에 추가했을 때 앱처럼 보이게 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="IPA 패처">
+<meta name="application-name" content="IPA 패처">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141518" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <style>
   :root {
     --bg: #f4f5f7; --card: #ffffff; --text: #1c1d21; --muted: #6b6f78; --line: #e3e5ea;
@@ -21,7 +32,21 @@
     margin: 0; background: var(--bg); color: var(--text);
     font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", sans-serif;
   }
-  main { max-width: 720px; margin: 0 auto; padding: 40px 20px 80px; }
+  main {
+    max-width: 720px; margin: 0 auto;
+    /* 노치·홈 바 영역 피하기 (홈 화면 앱으로 열었을 때) */
+    padding: max(40px, calc(env(safe-area-inset-top) + 16px)) max(20px, env(safe-area-inset-right))
+             max(80px, calc(env(safe-area-inset-bottom) + 40px)) max(20px, env(safe-area-inset-left));
+  }
+  html { -webkit-text-size-adjust: 100%; }
+  body { -webkit-tap-highlight-color: transparent; }
+  .actions { display: grid; gap: 8px; margin-top: 12px; }
+  .actions .download { margin-top: 0; }
+  a.share {
+    display: none; text-align: center; text-decoration: none; cursor: pointer;
+    border: 1px solid var(--line); color: var(--text); padding: 12px; border-radius: 12px; font-weight: 600;
+  }
+  a.share.show { display: block; }
   h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.02em; }
   .sub { color: var(--muted); margin: 0 0 28px; font-size: 14px; }
   .card {
@@ -47,6 +72,7 @@
   input[type=text] {
     width: 100%; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--line);
     background: transparent; color: var(--text); font: inherit;
+    font-size: 16px; /* 16px 미만이면 아이폰이 입력할 때 화면을 확대함 */
   }
   input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
   .row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
@@ -97,8 +123,9 @@
 
   <section class="card" id="step-ipa">
     <h2><span class="num">1</span>IPA 불러오기</h2>
-    <div class="drop" id="drop"><b>IPA 파일을 끌어다 놓거나 클릭</b><br><span class="muted">.ipa</span></div>
-    <input type="file" id="ipa-input" accept=".ipa" hidden>
+    <div class="drop" id="drop"><b>IPA 파일 선택</b><br><span class="muted">탭해서 고르거나 끌어다 놓기</span></div>
+    <!-- accept 를 지정하면 아이폰 '파일' 앱에서 .ipa 가 회색으로 막힐 수 있어서 비워 둠 -->
+    <input type="file" id="ipa-input" hidden>
     <dl class="info" id="app-info"></dl>
   </section>
 
@@ -127,7 +154,7 @@
       <button id="dylib-btn">dylib 추가</button>
       <label class="check"><input type="checkbox" id="weak-input"> weak 링크 (dylib를 못 불러와도 앱이 꺼지지 않게)</label>
     </div>
-    <input type="file" id="dylib-input" accept=".dylib" multiple hidden>
+    <input type="file" id="dylib-input" multiple hidden>
     <div class="warn" id="substrate-warn" hidden>
       <span class="tag">CydiaSubstrate</span> 표시된 dylib는 탈옥용 후킹 프레임워크를 찾아요.
       탈옥 안 된 기기에서는 CydiaSubstrate 대체 프레임워크(ElleKit 등)도 같이 넣어야 실행돼요.
@@ -136,7 +163,10 @@
 
   <button class="primary" id="build" disabled>새 IPA 만들기</button>
   <pre class="log" id="log"></pre>
-  <a class="download" id="download">⬇︎ 다운로드</a>
+  <div class="actions">
+    <a class="share" id="share">공유 · SideStore 등에서 열기</a>
+    <a class="download" id="download">⬇︎ 다운로드</a>
+  </div>
 
   <footer>
     서명은 하지 않아요. 만든 IPA는 SideStore · AltStore · Sideloadly 로 설치할 때 서명돼요.<br>
@@ -639,6 +669,7 @@ function log(msg, cls) {
 function clearOutput() {
   logEl.textContent = ""; logEl.classList.remove("show");
   $("download").classList.remove("show");
+  $("share").classList.remove("show");
   if (state.downloadUrl) { URL.revokeObjectURL(state.downloadUrl); state.downloadUrl = null; }
 }
 
@@ -702,6 +733,11 @@ $("dylib-btn").onclick = () => $("dylib-input").click();
 $("dylib-input").onchange = async (e) => {
   for (const f of e.target.files) {
     const data = new Uint8Array(await f.arrayBuffer());
+    const magic = data.length >= 4 ? new DataView(data.buffer).getUint32(0, false) : 0;
+    if (![0xCFFAEDFE, 0xCEFAEDFE, 0xCAFEBABE, 0xCAFEBABF].includes(magic)) {
+      alert(`${f.name} 은(는) dylib(Mach-O) 파일이 아니에요.`);
+      continue;
+    }
     state.dylibs = state.dylibs.filter((d) => d.name !== f.name);
     state.dylibs.push({ name: f.name, data, substrate: bytesInclude(data, "CydiaSubstrate") });
   }
@@ -739,6 +775,17 @@ $("download").onclick = async (ev) => {
   }
 };
 
+$("share").onclick = async () => {
+  if (!state.shareFile) return;
+  try { await navigator.share({ files: [state.shareFile] }); }
+  catch (err) { if (err && err.name !== "AbortError") log("공유 실패: " + err.message, "e"); }
+};
+
+// ── 오프라인에서도 열리게 (GitHub Pages 등 https 에서만)
+if ("serviceWorker" in navigator && location.protocol === "https:" && window.top === window.self) {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+
 // ── 만들기
 $("build").onclick = async () => {
   clearOutput();
@@ -759,6 +806,14 @@ $("build").onclick = async () => {
       ? `⬇︎ ${fileName}.zip 저장 (${fmtSize(blob.size)}) — 받은 뒤 끝의 .zip 지우기`
       : `⬇︎ ${fileName} 다운로드 (${fmtSize(blob.size)})`;
     a.classList.add("show");
+    // 아이폰: 공유 시트로 SideStore·AltStore·'파일에 저장' 등으로 바로 보내기
+    try {
+      const file = new File([blob], fileName, { type: "application/octet-stream" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        state.shareFile = file;
+        $("share").classList.add("show");
+      }
+    } catch { /* 공유 미지원 브라우저 */ }
     log("완료! SideStore / AltStore / Sideloadly 로 설치하면 돼요.", "o");
   } catch (err) {
     log("오류: " + err.message, "e");

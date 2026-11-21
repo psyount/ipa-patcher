@@ -11,6 +11,15 @@ SideStore · AltStore · Sideloadly를 합친 사이드로딩 앱을 만드는 �
 - 외부 라이브러리 없이 HTML 파일 하나로 되어 있어요 (ZIP · Mach-O · plist 처리를 직접 구현).
 - 필요 환경: Safari 16.4+ / Chrome 103+ / Firefox 113+
 
+### 아이폰 홈 화면에 앱처럼 추가
+
+1. 아이폰 Safari로 위 주소를 열어요.
+2. 공유 버튼 → **홈 화면에 추가**를 눌러요. (이름은 "IPA 패처"로 나와요)
+3. 홈 화면 아이콘으로 열면 주소창 없이 앱처럼 열리고, 한 번 연 뒤에는 오프라인에서도 열려요.
+4. 만든 IPA는 **공유 · SideStore 등에서 열기** 버튼으로 SideStore나 '파일' 앱으로 바로 보낼 수 있어요.
+
+큰 IPA(수백 MB 이상)는 아이폰 메모리가 부족해서 앱이 다시 로드될 수 있어요. 그럴 땐 맥에서 만들어 주세요.
+
 ## 파이썬 버전 (`ipa_patcher.py`)
 
 macOS 기본 도구(python3, zip, unzip, sips)만 써요.
